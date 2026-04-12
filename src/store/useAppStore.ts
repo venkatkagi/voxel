@@ -218,14 +218,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
         try {
           const bytes: any = await invoke("get_audio_chunk", { seconds: currentWindowSeconds });
           if (bytes && (bytes.length > 0 || bytes.byteLength > 0)) {
-            const { transcriptionProvider, transcriptionModel, language } = get();
+            // Read fresh from store each tick — key may have changed
+            const { transcriptionProvider, transcriptionModel, language, providerApiKeys } = get();
+            const liveApiKey = providerApiKeys[transcriptionProvider] ?? "";
+            if (!liveApiKey) return;
+
             const { transcribeAudio } = await import("../lib/transcription");
-            const result = await transcribeAudio(new Uint8Array(bytes), transcriptionProvider, transcriptionModel, transcribeKey, language);
+            const result = await transcribeAudio(new Uint8Array(bytes), transcriptionProvider, transcriptionModel, liveApiKey, language);
 
             if (result.text && result.noSpeechProb < 0.9) {
               const prevDraft = get().draftText;
               const prevStable = get().stableText;
-              
+
               // Stability heuristic: prevent violent regressions
               if (result.text.length >= prevDraft.length - 3 || result.text.length > prevStable.length) {
                 set({ draftText: result.text });
@@ -301,7 +305,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
       set({ polishedTranscript: polished, stableText: polished, draftText: "" });
       emitLiveTranscription(polished, "");
       await writeText(polished);
-      await new Promise(r => setTimeout(r, 100));
+      // Rust's simulate_paste already sleeps 300ms for focus restoration
       await invoke("simulate_paste");
 
       set({ recordingState: "done" });

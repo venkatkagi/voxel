@@ -228,9 +228,9 @@ fn convert_samples_to_wav(samples: &[f32], meta: &RecordingMeta) -> Result<Vec<u
         }
     }
 
-    // 3. Peak Normalization with higher gain ceiling (15x)
+    // 3. Peak Normalization (5x ceiling — higher amplifies background noise)
     let max_amp = mono.iter().fold(0.0f32, |acc, &s| acc.max(s.abs()));
-    let gain = if max_amp > 0.0001 { (0.95 / max_amp).min(15.0) } else { 1.0 };
+    let gain = if max_amp > 0.0001 { (0.95 / max_amp).min(5.0) } else { 1.0 };
     if gain > 1.0 {
         for s in mono.iter_mut() {
             *s = (*s * gain).clamp(-1.0, 1.0);

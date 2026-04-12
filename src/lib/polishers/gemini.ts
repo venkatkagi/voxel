@@ -23,24 +23,38 @@ export async function polishWithGemini(
   model: string,
   apiKey: string
 ): Promise<string> {
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        system_instruction: { parts: [{ text: SYSTEM_PROMPT(tone) }] },
-        contents: [{ parts: [{ text: rawText }] }],
-        generationConfig: { temperature: 0.1 },
-      }),
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20_000);
+
+  try {
+    // Note: Gemini requires API key in URL — this is Google's API design.
+    // The key is more exposed than header-based auth (visible in logs/proxies).
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          system_instruction: { parts: [{ text: SYSTEM_PROMPT(tone) }] },
+          contents: [{ parts: [{ text: rawText }] }],
+          generationConfig: { temperature: 0.1 },
+        }),
+        signal: controller.signal,
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Gemini polish failed (${response.status})`);
     }
-  );
 
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Gemini polish error ${response.status}: ${err}`);
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? rawText;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("Gemini polish timed out after 20s");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  const data = await response.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? rawText;
 }

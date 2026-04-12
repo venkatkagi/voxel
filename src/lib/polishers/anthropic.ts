@@ -23,27 +23,39 @@ export async function polishWithAnthropic(
   model: string,
   apiKey: string
 ): Promise<string> {
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      max_tokens: 1024,
-      temperature: 0.1,
-      system: SYSTEM_PROMPT(tone),
-      messages: [{ role: "user", content: rawText }],
-    }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20_000);
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Anthropic polish error ${res.status}: ${err}`);
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 1024,
+        temperature: 0.1,
+        system: SYSTEM_PROMPT(tone),
+        messages: [{ role: "user", content: rawText }],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      throw new Error(`Anthropic polish failed (${res.status})`);
+    }
+
+    const data = await res.json();
+    return data.content?.[0]?.text ?? rawText;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("Anthropic polish timed out after 20s");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  const data = await res.json();
-  return data.content?.[0]?.text ?? rawText;
 }

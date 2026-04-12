@@ -8,22 +8,36 @@ export async function transcribeWithDeepgram(
 ): Promise<TranscriptionResult> {
   if (!apiKey) throw new Error("Deepgram API key not set");
 
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+
   const langParam = language === "auto" ? "detect_language=true" : `language=${language}`;
-  const response = await fetch(
-    `https://api.deepgram.com/v1/listen?model=${model}&${langParam}&punctuate=true`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Token ${apiKey}`,
-        "Content-Type": "audio/wav",
-      },
-      body: wavBuffer,
+  let response: Response;
+  try {
+    response = await fetch(
+      `https://api.deepgram.com/v1/listen?model=${model}&${langParam}&punctuate=true`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Token ${apiKey}`,
+          "Content-Type": "audio/wav",
+        },
+        body: wavBuffer,
+        signal: controller.signal,
+      }
+    );
+  } catch (err) {
+    clearTimeout(timeout);
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("Deepgram transcription timed out after 30s");
     }
-  );
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Deepgram API error ${response.status}: ${error}`);
+    throw new Error(`Deepgram transcription failed (${response.status})`);
   }
 
   const data = await response.json();

@@ -27,27 +27,39 @@ export async function polishWithGroqLLM(
   model: string,
   apiKey: string
 ): Promise<string> {
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.1,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT(tone) },
-        { role: "user", content: userMessage(rawText) },
-      ],
-    }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15_000);
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Groq LLM polish error ${res.status}: ${err}`);
+  try {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.1,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT(tone) },
+          { role: "user", content: userMessage(rawText) },
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      throw new Error(`Groq LLM polish failed (${res.status})`);
+    }
+
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content ?? rawText;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("Groq polish timed out after 15s");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? rawText;
 }

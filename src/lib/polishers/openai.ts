@@ -23,27 +23,39 @@ export async function polishWithOpenAI(
   model: string,
   apiKey: string
 ): Promise<string> {
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.1,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT(tone) },
-        { role: "user", content: rawText },
-      ],
-    }),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20_000);
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`OpenAI polish error ${res.status}: ${err}`);
+  try {
+    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        temperature: 0.1,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT(tone) },
+          { role: "user", content: rawText },
+        ],
+      }),
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      throw new Error(`OpenAI polish failed (${res.status})`);
+    }
+
+    const data = await res.json();
+    return data.choices?.[0]?.message?.content ?? rawText;
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("OpenAI polish timed out after 20s");
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
   }
-
-  const data = await res.json();
-  return data.choices?.[0]?.message?.content ?? rawText;
 }
