@@ -24,7 +24,7 @@ export const PROVIDERS: Provider[] = [
   {
     id: "groq",
     name: "Groq",
-    defaultModel: "whisper-large-v3-turbo",
+    defaultModel: "whisper-large-v3",
     models: [
       { id: "whisper-large-v3-turbo", name: "Whisper Large v3 Turbo" },
       { id: "whisper-large-v3", name: "Whisper Large v3" },

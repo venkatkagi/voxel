@@ -2,18 +2,18 @@
 @import "tailwindcss";
 
 @theme {
-  /* Surface scale — Sophisticated Charcoal Grey (Zinc-950ish base) */
-  --color-surface:                    oklch(0.12 0.005 260);
-  --color-surface-container-low:      oklch(0.15 0.007 260);
-  --color-surface-container:          oklch(0.18 0.009 260);
-  --color-surface-container-high:     oklch(0.22 0.012 260);
-  --color-surface-container-highest:  oklch(0.26 0.014 260);
-  --color-on-surface:                 oklch(0.94 0.005 260);
+  /* Surface scale — Warm Charcoal with subtle red warmth */
+  --color-surface:                    oklch(0.12 0.010 15);
+  --color-surface-container-low:      oklch(0.15 0.012 15);
+  --color-surface-container:          oklch(0.18 0.014 15);
+  --color-surface-container-high:     oklch(0.22 0.016 15);
+  --color-surface-container-highest:  oklch(0.26 0.018 15);
+  --color-on-surface:                 oklch(0.94 0.008 20);
 
   /* Accent — Premium Signal (Subtle Warmth) */
   --color-signal: oklch(0.68 0.12 35);
 
-  --color-outline-variant: oklch(0.28 0.01 260);
+  --color-outline-variant: oklch(0.28 0.014 15);
 
   /* Semantic: active / success */
   --color-active: oklch(0.62 0.16 160);
@@ -45,7 +45,8 @@ html, body, #root {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 60% 50% at 0% 0%, rgba(255, 255, 255, 0.015) 0%, transparent 70%);
+    radial-gradient(ellipse 60% 50% at 0% 0%, rgba(220, 60, 30, 0.025) 0%, transparent 70%),
+    radial-gradient(ellipse 40% 40% at 100% 100%, rgba(180, 30, 20, 0.018) 0%, transparent 60%);
   pointer-events: none;
   z-index: 0;
 }
@@ -67,6 +68,6 @@ html, body, #root {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.22 0.003 40);
+  background: oklch(0.24 0.018 15);
   border-radius: 10px;
 }

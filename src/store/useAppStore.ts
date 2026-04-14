@@ -108,7 +108,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   microphoneDevice: null,
   language: "auto",
   transcriptionProvider: "groq",
-  transcriptionModel: "whisper-large-v3-turbo",
+  transcriptionModel: "whisper-large-v3",
   providerApiKeys: {},
   polishEnabled: false,
   polishProvider: "groq",
@@ -149,7 +149,9 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setTranscriptionModel: (transcriptionModel) => set({ transcriptionModel }),
   setProviderApiKey: (provider, key) =>
     set((state) => ({
-      providerApiKeys: { ...state.providerApiKeys, [provider]: key },
+      // Strip non-printable-ASCII chars (invisible Unicode, zero-width spaces, etc.)
+      // that break ISO-8859-1 header validation when the key is pasted from clipboard.
+      providerApiKeys: { ...state.providerApiKeys, [provider]: key.trim().replace(/[^\x20-\x7E]/g, "") },
     })),
 
   setPolishEnabled: (polishEnabled) => set({ polishEnabled }),
@@ -269,12 +271,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
       const { transcribeAudio } = await import("../lib/transcription");
       const result = await transcribeAudio(wavBuffer, transcriptionProvider, transcriptionModel, transcribeApiKey, language);
+      console.log(`[dictation] Transcribed: "${result.text}" (noSpeechProb: ${result.noSpeechProb})`);
 
-      // 0.6 was too aggressive — valid recordings (especially short phrases or
-      // accented speech) were silently discarded. Raised to 0.75 for a better balance.
-      if (result.noSpeechProb > 0.75) {
-        set({ recordingState: "idle", isRecording: false });
+      // 0.85 is more forgiving than 0.75 for the full v3 model which can be more sensitive.
+      if (result.noSpeechProb > 0.85) {
+        console.warn("[dictation] Discarding result: silence/noise detected");
+        set({ recordingState: "idle", isRecording: false, draftText: "", stableText: "" });
         emitRecordingState("idle");
+        emitLiveTranscription("", "");
+        return;
+      }
+
+      if (!result.text.trim()) {
+        console.warn("[dictation] Discarding result: empty text");
+        set({ recordingState: "idle", isRecording: false, draftText: "", stableText: "" });
+        emitRecordingState("idle");
+        emitLiveTranscription("", "");
         return;
       }
 

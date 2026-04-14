@@ -6,7 +6,8 @@ export async function transcribeWithGroq(
   apiKey: string,
   language: string = "auto"
 ): Promise<TranscriptionResult> {
-  if (!apiKey) throw new Error("Groq API key not set");
+  const sanitizedKey = apiKey.trim().replace(/[^\x20-\x7E]/g, "");
+  if (!sanitizedKey) throw new Error("Groq API key not set");
 
   // .slice(0) copies into a plain ArrayBuffer — required because Tauri-provided
   // Uint8Arrays have an ArrayBufferLike backing that Blob rejects under strict TS.
@@ -19,6 +20,12 @@ export async function transcribeWithGroq(
   }
   form.append("response_format", "verbose_json");
   form.append("temperature", "0");
+  // Vocabulary hint — biases the Whisper decoder toward common tech terms and
+  // proper nouns, reducing substitution artifacts (e.g. "verse code" → "VS Code").
+  form.append(
+    "prompt",
+    "Dictation of natural speech. GitHub, VS Code, API, app, okay, TypeScript, React, npm, function, interface, Tailwind, Tauri, Rust, Python, Docker, Kubernetes, OpenAI, Groq, Gemini."
+  );
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
@@ -27,7 +34,7 @@ export async function transcribeWithGroq(
   try {
     response = await fetch("https://api.groq.com/openai/v1/audio/transcriptions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}` },
+      headers: { Authorization: `Bearer ${sanitizedKey}` },
       body: form,
       signal: controller.signal,
     });

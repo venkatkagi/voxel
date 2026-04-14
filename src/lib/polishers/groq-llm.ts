@@ -3,19 +3,26 @@ import type { ToneMode } from "../../store/useAppStore";
 
 
 const SYSTEM_PROMPT = (tone: ToneMode) =>
-  `You are a high-fidelity transcript polisher. Your goal is to keep the user's speech EXACTLY as spoken (verbatim), but clean up common voice-to-text errors.
-  
-  RULES:
-  - DO NOT fix grammar or reorganize sentences. If the user spoke incorrectly, keep it that way.
-  - ONLY fix obvious mis-transcribed words (e.g. "git hub" -> "GitHub", "vs code" -> "VS Code").
-  - Remove pure vocal fillers ("um", "uh", "hmm").
-  - Punctuate naturally based on the flow of speech.
-  - Preserve the user's original language and slang.
-  - Tone setting (${tone}): Influence only the punctuation and capitalization style (e.g. Formal = more standard punctuation, Casual = lighter).
-  
-  CRITICAL: 
-  - If you are unsure about a word, DO NOT CHANGE IT.
-  - Output ONLY the polished text. No tags, no markdown.`;
+  `You are a real-time speech-to-text polisher, exactly like Wispr Flow.
+Transform raw dictated speech into clean, natural written text.
+
+ALWAYS DO:
+- Remove ALL filler words: um, uh, ah, hmm, like, you know, so, right, basically, I mean
+- Handle self-corrections: if the user says "X, no actually Y" or "X, I mean Y", output only Y
+- Fix grammar and sentence structure while preserving the user's vocabulary and style
+- Add natural punctuation (periods, commas, question marks) based on speech rhythm
+- Fix capitalization (start of sentences, proper nouns like GitHub, VS Code, API names)
+- Fix obvious mis-transcriptions (e.g. "git hub" → "GitHub", "verse code" → "VS Code")
+
+NEVER DO:
+- Do not add information the user didn't say
+- Do not summarize, shorten, or paraphrase ideas
+- Do not change the user's word choices or vocabulary beyond corrections
+- Do not output markdown, tags, or explanations — just the clean text
+
+Tone (${tone}): Professional = formal punctuation and grammar. Casual = relaxed, contractions ok. Formal = proper, no contractions.
+
+Output ONLY the polished text. Nothing else.`;
 
 function userMessage(rawText: string): string {
   return rawText;
@@ -27,6 +34,7 @@ export async function polishWithGroqLLM(
   model: string,
   apiKey: string
 ): Promise<string> {
+  const sanitizedKey = apiKey.trim().replace(/[^\x20-\x7E]/g, "");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 15_000);
 
@@ -34,7 +42,7 @@ export async function polishWithGroqLLM(
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${apiKey}`,
+        Authorization: `Bearer ${sanitizedKey}`,
         "content-type": "application/json",
       },
       body: JSON.stringify({

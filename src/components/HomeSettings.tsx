@@ -1,8 +1,10 @@
 import React from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { CustomSelect } from "./ui/Select";
 import { useAppStore, ToneMode } from "@/store/useAppStore";
 import { persistSettings } from "@/hooks/useSettings";
+import { enable as autostartEnable, disable as autostartDisable, isEnabled as autostartIsEnabled } from "@tauri-apps/plugin-autostart";
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { RecordShortcutModal } from "./ShortcutRecorder";
@@ -77,9 +79,25 @@ export default function HomeSettings() {
     invoke<string[]>("get_microphones").then(setMics).catch(console.error);
   }, []);
 
-  const handleAutostartChange = (enabled: boolean) => {
-    useAppStore.setState({ autostartEnabled: enabled });
-    persistSettings({ autostartEnabled: enabled }).catch(console.error);
+  // Sync real OS autostart state into the store on mount
+  useEffect(() => {
+    autostartIsEnabled()
+      .then((osEnabled) => useAppStore.setState({ autostartEnabled: osEnabled }))
+      .catch(() => {}); // silently ignore if plugin unavailable
+  }, []);
+
+  const handleAutostartChange = async (enabled: boolean) => {
+    try {
+      if (enabled) {
+        await autostartEnable();
+      } else {
+        await autostartDisable();
+      }
+      useAppStore.setState({ autostartEnabled: enabled });
+      persistSettings({ autostartEnabled: enabled }).catch(console.error);
+    } catch (err) {
+      console.error("[autostart]", err);
+    }
   };
   const handleHistoryChange = (enabled: boolean) => {
     setHistoryEnabled(enabled);
@@ -242,14 +260,17 @@ export default function HomeSettings() {
           </div>
         </div>
 
-      <AnimatePresence>
-        {showHotkeyModal && (
-          <RecordShortcutModal
-            onSave={handleSaveHotkey}
-            onCancel={() => setShowHotkeyModal(false)}
-          />
-        )}
-      </AnimatePresence>
+      {createPortal(
+        <AnimatePresence>
+          {showHotkeyModal && (
+            <RecordShortcutModal
+              onSave={handleSaveHotkey}
+              onCancel={() => setShowHotkeyModal(false)}
+            />
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </motion.div>
   );
 }

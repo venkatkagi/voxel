@@ -1,6 +1,7 @@
 import { load } from "@tauri-apps/plugin-store";
 import { useAppStore, ToneMode } from "@/store/useAppStore";
 import { enable, disable, isEnabled } from "@tauri-apps/plugin-autostart";
+import { emit } from "@tauri-apps/api/event";
 
 const STORE_FILE = "settings.json";
 
@@ -53,7 +54,11 @@ export async function loadSettings(): Promise<void> {
     polishModel: polishModel ?? prev.polishModel,
     microphoneDevice: microphoneDevice === undefined ? prev.microphoneDevice : microphoneDevice,
     language: language ?? prev.language,
-    providerApiKeys: providerApiKeys ?? prev.providerApiKeys,
+    providerApiKeys: providerApiKeys
+      ? Object.fromEntries(
+          Object.entries(providerApiKeys).map(([k, v]) => [k, v.trim().replace(/[^\x20-\x7E]/g, "")])
+        )
+      : prev.providerApiKeys,
     hasSeenWelcome: hasSeenWelcome ?? prev.hasSeenWelcome,
   }));
 }
@@ -64,6 +69,8 @@ export async function persistSettings(patch: Partial<PersistedSettings>): Promis
     await store.set(key, value);
   }
   await store.save();
+  // Broadcast change so other windows (Main, Pill) can reload their store
+  await emit("settings-changed", {});
 }
 
 export async function setAutostart(enabled: boolean): Promise<void> {

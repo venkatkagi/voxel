@@ -39,8 +39,17 @@ pub fn get_microphones() -> Result<Vec<String>, String> {
 
 #[tauri::command]
 pub fn init_audio_stream(app: tauri::AppHandle, device_name: Option<String>) -> Result<(), String> {
-    if RECORDING_STREAM.lock().unwrap().is_some() {
-        return Ok(()); // Already running
+    // If a recording is actively in progress, do not tear down the stream —
+    // that would wipe RECORDING_SAMPLES and cause "No audio captured".
+    if IS_RECORDING.load(Ordering::SeqCst) {
+        return Ok(());
+    }
+
+    // Drop any existing stream cleanly before rebuilding so the new stream
+    // writes into the fresh Arc instead of the old one.
+    {
+        let mut stream_lock = RECORDING_STREAM.lock().unwrap();
+        *stream_lock = None; // drops + stops the old WASAPI stream
     }
 
     let host = cpal::default_host();
